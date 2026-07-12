@@ -1,4 +1,4 @@
-// netlify/functions/submit.js
+// netlify/functions/submit.mjs
 import { getStore } from "@netlify/blobs";
 
 // SHA-256 hashes of valid flags — never shipped to the client.
@@ -8,6 +8,8 @@ const VALID_HASHES = {
   "68ee6df2c9b96122783f69a79a29df5ecc58931f0a3ae3e70e270e6105477757": "banana3"
 };
 
+const MAX_NAME_LEN = 24;
+
 async function sha256Hex(text) {
   const enc = new TextEncoder().encode(text);
   const digest = await crypto.subtle.digest("SHA-256", enc);
@@ -16,16 +18,9 @@ async function sha256Hex(text) {
     .join("");
 }
 
-// Mask an IP for public display, e.g. 203.0.113.42 -> 203.0.113.xx
-function maskIp(ip) {
-  if (!ip) return "unknown";
-  if (ip.includes(".")) {
-    const parts = ip.split(".");
-    parts[3] = "xx";
-    return parts.join(".");
-  }
-  const parts = ip.split(":");
-  return parts.slice(0, 4).join(":") + ":xxxx:xxxx:xxxx:xxxx";
+function sanitizeName(name) {
+  const trimmed = (name || "").trim().slice(0, MAX_NAME_LEN);
+  return trimmed || "anonymous";
 }
 
 export default async (req, context) => {
@@ -41,6 +36,8 @@ export default async (req, context) => {
   }
 
   const raw = (body.flag || "").trim();
+  const playerName = sanitizeName(body.name);
+
   if (!raw) {
     return new Response(JSON.stringify({ ok: false, error: "empty" }), { status: 400 });
   }
@@ -54,7 +51,9 @@ export default async (req, context) => {
     });
   }
 
-  const ip = context.ip || "unknown"; // Netlify provides the real client IP here
+  // Kept for abuse-tracing only — never shown on the leaderboard.
+  const ip = context.ip || "unknown";
+
   const store = getStore("flags");
   const existing = await store.get(target, { type: "json" });
 
@@ -64,14 +63,14 @@ export default async (req, context) => {
         ok: true,
         first: false,
         target,
-        capturedBy: maskIp(existing.ip),
+        capturedBy: existing.name,
         capturedAt: existing.time
       }),
       { headers: { "Content-Type": "application/json" } }
     );
   }
 
-  const record = { ip, time: Date.now() };
+  const record = { name: playerName, ip, time: Date.now() };
   await store.setJSON(target, record);
 
   return new Response(
@@ -79,7 +78,7 @@ export default async (req, context) => {
       ok: true,
       first: true,
       target,
-      capturedBy: maskIp(ip),
+      capturedBy: record.name,
       capturedAt: record.time
     }),
     { headers: { "Content-Type": "application/json" } }
