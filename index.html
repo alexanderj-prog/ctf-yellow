@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FLAG SUBMISSION</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --void:#0a0a0a;
+    --panel:#121212;
+    --line:#2a2a2a;
+    --blood:#c81e2c;
+    --blood-bright:#ff2e3e;
+    --paper:#eeeeee;
+    --paper-dim:#888888;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--void);
+    color:var(--paper);
+    font-family:'Courier New', ui-monospace, monospace;
+    overflow-x:hidden;
+    position:relative;
+  }
+
+  /* scanline / noise overlay */
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background:repeating-linear-gradient(
+      to bottom,
+      rgba(255,255,255,0.025) 0px,
+      rgba(255,255,255,0.025) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    pointer-events:none;
+    z-index:50;
+    mix-blend-mode:overlay;
+  }
+
+  .grid-bg{
+    position:fixed; inset:0;
+    background-image:
+      linear-gradient(rgba(200,30,44,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(200,30,44,0.06) 1px, transparent 1px);
+    background-size:38px 38px;
+    z-index:0;
+    animation:drift 26s linear infinite;
+  }
+  @keyframes drift{
+    from{background-position:0 0;}
+    to{background-position:38px 38px;}
+  }
+
+  .wrap{
+    position:relative;
+    z-index:2;
+    max-width:760px;
+    margin:0 auto;
+    padding:56px 24px 90px;
+  }
+
+  header{
+    border-bottom:1px solid var(--line);
+    padding-bottom:22px;
+    margin-bottom:34px;
+  }
+  .tag{
+    font-size:11px;
+    letter-spacing:.32em;
+    color:var(--blood-bright);
+    text-transform:uppercase;
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .tag::before{
+    content:"";
+    width:7px;height:7px;
+    background:var(--blood-bright);
+    box-shadow:0 0 8px var(--blood-bright);
+    animation:pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%,100%{opacity:1;}
+    50%{opacity:.25;}
+  }
+
+  h1{
+    font-family:'Courier New', monospace;
+    font-size:clamp(38px, 8vw, 68px);
+    line-height:.95;
+    letter-spacing:-1px;
+    margin:14px 0 6px;
+    text-transform:uppercase;
+    color:var(--paper);
+    position:relative;
+    width:fit-content;
+  }
+  h1 .glitch-layer{
+    position:absolute; inset:0;
+    color:var(--blood-bright);
+    overflow:hidden;
+    clip-path:inset(0 0 92% 0);
+    animation:glitchTop 3.4s infinite steps(1);
+  }
+  h1 .glitch-layer2{
+    position:absolute; inset:0;
+    color:var(--blood);
+    overflow:hidden;
+    clip-path:inset(88% 0 0 0);
+    animation:glitchBot 3.4s infinite steps(1);
+  }
+  @keyframes glitchTop{
+    0%,88%,100%{ transform:translate(0,0); opacity:0; }
+    89%{ transform:translate(-3px,0); opacity:1; }
+    90%{ transform:translate(3px,0); opacity:1; }
+    91%{ opacity:0; }
+  }
+  @keyframes glitchBot{
+    0%,90%,100%{ transform:translate(0,0); opacity:0; }
+    91%{ transform:translate(3px,0); opacity:1; }
+    92%{ transform:translate(-4px,0); opacity:1; }
+    93%{ opacity:0; }
+  }
+
+  .subtitle{
+    color:var(--paper-dim);
+    font-size:13px;
+    max-width:480px;
+    line-height:1.6;
+    margin-top:10px;
+  }
+  .subtitle b{ color:var(--paper); font-weight:normal; border-bottom:1px dotted var(--blood); }
+
+  /* console */
+  .console{
+    background:var(--panel);
+    border:1px solid var(--line);
+    position:relative;
+  }
+  .console::before{
+    content:"";
+    position:absolute; top:0; left:0; right:0; height:2px;
+    background:linear-gradient(90deg, transparent, var(--blood-bright), transparent);
+  }
+  .console-head{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 16px;
+    border-bottom:1px solid var(--line);
+    font-size:11px;
+    letter-spacing:.18em;
+    color:var(--paper-dim);
+    text-transform:uppercase;
+  }
+  .dots{ display:flex; gap:6px; }
+  .dots span{ width:8px; height:8px; border-radius:50%; background:var(--line); }
+  .dots span:nth-child(1){ background:var(--blood); }
+
+  .console-body{ padding:26px 20px 22px; }
+
+  .field-label{
+    font-size:11px;
+    letter-spacing:.2em;
+    text-transform:uppercase;
+    color:var(--blood-bright);
+    margin-bottom:10px;
+    display:flex;
+    gap:8px;
+    align-items:center;
+  }
+  .field-label::before{ content:"›"; color:var(--paper-dim); }
+
+  .input-row{
+    display:flex;
+    align-items:center;
+    background:#0d0d0d;
+    border:1px solid var(--line);
+    padding:0 4px;
+    transition:border-color .2s ease, box-shadow .2s ease;
+  }
+  .input-row:focus-within{
+    border-color:var(--blood);
+    box-shadow:0 0 0 1px var(--blood), 0 0 18px rgba(200,30,44,.25);
+  }
+  .prompt-glyph{
+    color:var(--blood-bright);
+    padding:14px 6px 14px 12px;
+    font-size:15px;
+    user-select:none;
+  }
+  input[type="text"]{
+    flex:1;
+    background:transparent;
+    border:none;
+    outline:none;
+    color:var(--paper);
+    font-family:inherit;
+    font-size:15px;
+    padding:14px 12px 14px 0;
+    letter-spacing:.5px;
+  }
+  input[type="text"]::placeholder{ color:#4a4a4a; }
+
+  .submit-btn{
+    margin-top:18px;
+    width:100%;
+    background:var(--blood);
+    color:#fff;
+    border:none;
+    padding:15px 18px;
+    font-family:inherit;
+    font-size:13px;
+    letter-spacing:.28em;
+    text-transform:uppercase;
+    cursor:pointer;
+    position:relative;
+    overflow:hidden;
+    transition:background .15s ease, transform .1s ease;
+  }
+  .submit-btn:hover{ background:var(--blood-bright); }
+  .submit-btn:active{ transform:scale(.995); }
+  .submit-btn::after{
+    content:"";
+    position:absolute; top:0; left:-120%;
+    width:60%; height:100%;
+    background:linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent);
+    transform:skewX(-20deg);
+    transition:left .5s ease;
+  }
+  .submit-btn:hover::after{ left:140%; }
+
+  /* result line */
+  .result{
+    margin-top:20px;
+    padding:14px 16px;
+    border-left:3px solid var(--line);
+    font-size:13px;
+    line-height:1.7;
+    display:none;
+    background:#0d0d0d;
+    white-space:pre-wrap;
+    word-break:break-all;
+  }
+  .result.show{ display:block; }
+  .result.ok{ border-color:#3ecf5e; color:#8ff0a4; }
+  .result.bad{ border-color:var(--blood-bright); color:#ff9aa0; }
+  .result .rline{ display:block; }
+  .result .dim{ color:var(--paper-dim); }
+
+  /* progress / captured tracker */
+  .tracker{
+    margin-top:34px;
+    display:grid;
+    grid-template-columns:repeat(3, 1fr);
+    gap:10px;
+  }
+  .cell{
+    border:1px solid var(--line);
+    background:var(--panel);
+    padding:14px 12px;
+    position:relative;
+    transition:border-color .3s ease, background .3s ease;
+  }
+  .cell .idx{
+    font-size:10px; letter-spacing:.2em; color:var(--paper-dim);
+    text-transform:uppercase;
+  }
+  .cell .stat{
+    margin-top:8px;
+    font-size:12px;
+    color:#4a4a4a;
+    letter-spacing:.05em;
+  }
+  .cell.captured{
+    border-color:#3ecf5e;
+    background:#0d1710;
+  }
+  .cell.captured .stat{ color:#3ecf5e; }
+  .cell.captured::after{
+    content:"✓";
+    position:absolute; top:10px; right:12px;
+    color:#3ecf5e;
+    font-size:13px;
+  }
+
+  footer{
+    margin-top:48px;
+    padding-top:18px;
+    border-top:1px solid var(--line);
+    font-size:11px;
+    color:#3d3d3d;
+    letter-spacing:.15em;
+    text-transform:uppercase;
+    display:flex;
+    justify-content:space-between;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .grid-bg, .tag::before, h1 .glitch-layer, h1 .glitch-layer2, .submit-btn::after{
+      animation:none !important;
+    }
+  }
+
+  @media (max-width:520px){
+    .tracker{ grid-template-columns:1fr; }
+    footer{ flex-direction:column; gap:6px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+
+<div class="wrap">
+  <header>
+    <div class="tag">Session Active · Awaiting Input</div>
+    <h1 data-text="FLAG SUBMISSION">
+      FLAG SUBMISSION
+      <span class="glitch-layer" aria-hidden="true">FLAG SUBMISSION</span>
+      <span class="glitch-layer2" aria-hidden="true">FLAG SUBMISSION</span>
+    </h1>
+    <p class="subtitle">Paste a captured flag in the format <b>name{...}</b> below. Verified submissions are logged to the capture tracker in real time.</p>
+  </header>
+
+  <div class="console">
+    <div class="console-head">
+      <span>root@ctf-gateway:~/submit</span>
+      <div class="dots"><span></span><span></span><span></span></div>
+    </div>
+    <div class="console-body">
+      <div class="field-label">Flag input</div>
+      <div class="input-row">
+        <span class="prompt-glyph">$</span>
+        <input type="text" id="flagInput" placeholder="banana1{...}" autocomplete="off" spellcheck="false">
+      </div>
+      <button class="submit-btn" id="submitBtn">Submit Flag</button>
+
+      <div class="result" id="result"></div>
+    </div>
+  </div>
+
+  <div class="console" style="margin-top:18px;">
+    <div class="console-head">
+      <span>first_blood.log</span>
+      <div class="dots"><span></span><span></span><span></span></div>
+    </div>
+    <div class="console-body" id="leaderboard">
+      <div class="subtitle" style="margin:0;">No captures logged yet.</div>
+    </div>
+  </div>
+
+  <div class="tracker" id="tracker">
+    <div class="cell" data-target="banana1">
+      <div class="idx">Target 01</div>
+      <div class="stat">Uncaptured</div>
+    </div>
+    <div class="cell" data-target="banana2">
+      <div class="idx">Target 02</div>
+      <div class="stat">Uncaptured</div>
+    </div>
+    <div class="cell" data-target="banana3">
+      <div class="idx">Target 03</div>
+      <div class="stat">Uncaptured</div>
+    </div>
+  </div>
+
+  <footer>
+    <span>Flags captured: <span id="countText">0/3</span></span>
+    <span id="clock">--:--:--</span>
+  </footer>
+</div>
+
+<script>
+  // Valid flags stored as SHA-256 hashes — raw flags never appear in page source.
+  // Same-origin Netlify Functions — no separate URL or CORS setup needed.
+  const API_BASE = "/api";
+
+  const captured = new Set();
+  const input = document.getElementById('flagInput');
+  const btn = document.getElementById('submitBtn');
+  const result = document.getElementById('result');
+  const countText = document.getElementById('countText');
+  const leaderboard = document.getElementById('leaderboard');
+
+  function timestamp(){
+    return new Date().toTimeString().split(' ')[0];
+  }
+
+  function fmtTime(ms){
+    return new Date(ms).toLocaleTimeString();
+  }
+
+  async function refreshLeaderboard(){
+    try{
+      const res = await fetch(`${API_BASE}/leaderboard`);
+      const data = await res.json();
+      if(!data.ok || data.results.length === 0){
+        leaderboard.innerHTML = `<div class="subtitle" style="margin:0;">No captures logged yet.</div>`;
+        return;
+      }
+      leaderboard.innerHTML = data.results.map((r, i) => `
+        <div class="field-label" style="margin-bottom:${i === data.results.length-1 ? 0 : 12}px;">
+          #${i+1} ${r.target} — <span style="color:var(--paper);">${r.ip}</span>
+          <span class="dim" style="color:var(--paper-dim); text-transform:none; letter-spacing:0; margin-left:6px;">@ ${fmtTime(r.time)}</span>
+        </div>
+      `).join('');
+    }catch(e){
+      leaderboard.innerHTML = `<div class="subtitle" style="margin:0; color:var(--blood-bright);">Leaderboard unavailable — check API_BASE / worker deployment.</div>`;
+    }
+  }
+
+  async function submitFlag(){
+    const raw = input.value.trim();
+    result.classList.remove('show','ok','bad');
+
+    if(!raw){
+      result.innerHTML = `<span class="rline">[${timestamp()}] ERROR — empty submission</span>`;
+      result.classList.add('show','bad');
+      return;
+    }
+
+    btn.disabled = true;
+    let data;
+    try{
+      const res = await fetch(`${API_BASE}/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ flag: raw })
+      });
+      data = await res.json();
+    }catch(e){
+      btn.disabled = false;
+      result.innerHTML = `<span class="rline">[${timestamp()}] ERROR — could not reach verification server</span>`;
+      result.classList.add('show','bad');
+      return;
+    }
+    btn.disabled = false;
+
+    if(data.ok){
+      const targetKey = data.target;
+
+      if(!captured.has(targetKey)){
+        captured.add(targetKey);
+        const cell = document.querySelector(`.cell[data-target="${targetKey}"]`);
+        cell.classList.add('captured');
+        cell.querySelector('.stat').textContent = 'Captured · ' + timestamp();
+        countText.textContent = captured.size + '/3';
+      }
+
+      if(data.first){
+        result.innerHTML =
+          `<span class="rline">[${timestamp()}] ACCESS GRANTED — FIRST BLOOD</span>` +
+          `<span class="rline dim">Flag verified against target ${targetKey}. You are the first to capture it.</span>`;
+      } else {
+        result.innerHTML =
+          `<span class="rline">[${timestamp()}] ACCESS GRANTED</span>` +
+          `<span class="rline dim">Flag verified against target ${targetKey}. First captured by ${data.capturedBy} at ${fmtTime(data.capturedAt)}.</span>`;
+      }
+      result.classList.add('show','ok');
+      input.value = '';
+      refreshLeaderboard();
+    } else {
+      result.innerHTML = `<span class="rline">[${timestamp()}] ACCESS DENIED — flag not recognized</span>`;
+      result.classList.add('show','bad');
+    }
+  }
+
+  btn.addEventListener('click', submitFlag);
+  input.addEventListener('keydown', (e) => { if(e.key === 'Enter') submitFlag(); });
+
+  function tickClock(){
+    document.getElementById('clock').textContent = timestamp();
+  }
+  tickClock();
+  setInterval(tickClock, 1000);
+  refreshLeaderboard();
+  setInterval(refreshLeaderboard, 5000);
+
+</script>
+
+</body>
+</html>
