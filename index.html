@@ -351,7 +351,7 @@
 
   <div class="console" style="margin-top:18px;">
     <div class="console-head">
-      <span>first_blood.log</span>
+      <span>race_results.log</span>
       <div class="dots"><span></span><span></span><span></span></div>
     </div>
     <div class="console-body" id="leaderboard">
@@ -393,12 +393,40 @@
   const countText = document.getElementById('countText');
   const leaderboard = document.getElementById('leaderboard');
 
+  // Stable per-browser identity, kept across reloads so captured flags aren't lost.
+  let clientId = localStorage.getItem('ctf_client_id');
+  if(!clientId){
+    clientId = crypto.randomUUID();
+    localStorage.setItem('ctf_client_id', clientId);
+  }
+
   // Remember the player's name across visits/reloads.
   const savedName = localStorage.getItem('ctf_player_name');
   if(savedName) nameInput.value = savedName;
   nameInput.addEventListener('input', () => {
     localStorage.setItem('ctf_player_name', nameInput.value.trim());
   });
+
+  function markCaptured(targetKey){
+    if(captured.has(targetKey)) return;
+    captured.add(targetKey);
+    const cell = document.querySelector(`.cell[data-target="${targetKey}"]`);
+    cell.classList.add('captured');
+    cell.querySelector('.stat').textContent = 'Captured · ' + timestamp();
+    countText.textContent = captured.size + '/3';
+  }
+
+  async function restoreProgress(){
+    try{
+      const res = await fetch(`${API_BASE}/me?clientId=${encodeURIComponent(clientId)}`);
+      const data = await res.json();
+      if(data.ok && data.exists){
+        data.capturedTargets.forEach(markCaptured);
+      }
+    }catch(e){
+      // Non-fatal — tracker just stays empty until the next successful submit.
+    }
+  }
 
   function escapeHtml(str){
     const div = document.createElement('div');
@@ -418,16 +446,28 @@
     try{
       const res = await fetch(`${API_BASE}/leaderboard`);
       const data = await res.json();
-      if(!data.ok || data.results.length === 0){
+      if(!data.ok || (data.completed.length === 0 && data.inProgress.length === 0)){
         leaderboard.innerHTML = `<div class="subtitle" style="margin:0;">No captures logged yet.</div>`;
         return;
       }
-      leaderboard.innerHTML = data.results.map((r, i) => `
-        <div class="field-label" style="margin-bottom:${i === data.results.length-1 ? 0 : 12}px;">
-          #${i+1} ${r.target} — <span style="color:var(--paper);">${escapeHtml(r.name)}</span>
-          <span class="dim" style="color:var(--paper-dim); text-transform:none; letter-spacing:0; margin-left:6px;">@ ${fmtTime(r.time)}</span>
+
+      const finished = data.completed.map((r) => `
+        <div class="field-label" style="margin-bottom:12px;">
+          #${r.rank} <span style="color:var(--paper);">${escapeHtml(r.name)}</span>
+          <span class="dim" style="color:var(--paper-dim); text-transform:none; letter-spacing:0; margin-left:6px;">finished @ ${fmtTime(r.finishTime)}</span>
         </div>
       `).join('');
+
+      const inProgress = data.inProgress.map((r) => `
+        <div class="field-label" style="margin-bottom:12px; color:var(--paper-dim);">
+          <span style="color:var(--paper);">${escapeHtml(r.name)}</span>
+          <span class="dim" style="color:var(--paper-dim); text-transform:none; letter-spacing:0; margin-left:6px;">${r.captureCount}/${data.totalTargets} captured</span>
+        </div>
+      `).join('');
+
+      leaderboard.innerHTML =
+        (finished || `<div class="subtitle" style="margin:0 0 12px;">No one has finished all three yet.</div>`) +
+        (inProgress ? `<div class="subtitle" style="margin:16px 0 8px; color:var(--paper-dim);">In progress</div>${inProgress}` : '');
     }catch(e){
       leaderboard.innerHTML = `<div class="subtitle" style="margin:0; color:var(--blood-bright);">Leaderboard unavailable — check API_BASE / worker deployment.</div>`;
     }
@@ -457,7 +497,7 @@
       const res = await fetch(`${API_BASE}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ flag: raw, name: playerName })
+        body: JSON.stringify({ flag: raw, name: playerName, clientId })
       });
       data = await res.json();
     }catch(e){
@@ -469,24 +509,16 @@
     btn.disabled = false;
 
     if(data.ok){
-      const targetKey = data.target;
+      markCaptured(data.target);
 
-      if(!captured.has(targetKey)){
-        captured.add(targetKey);
-        const cell = document.querySelector(`.cell[data-target="${targetKey}"]`);
-        cell.classList.add('captured');
-        cell.querySelector('.stat').textContent = 'Captured · ' + timestamp();
-        countText.textContent = captured.size + '/3';
-      }
-
-      if(data.first){
+      if(data.alreadyCaptured){
         result.innerHTML =
-          `<span class="rline">[${timestamp()}] ACCESS GRANTED — FIRST BLOOD</span>` +
-          `<span class="rline dim">Flag verified against target ${targetKey}. You are the first to capture it.</span>`;
+          `<span class="rline">[${timestamp()}] ACCESS GRANTED</span>` +
+          `<span class="rline dim">Target ${data.target} was already logged for you. Progress: ${data.captureCount}/${data.totalTargets}.</span>`;
       } else {
         result.innerHTML =
           `<span class="rline">[${timestamp()}] ACCESS GRANTED</span>` +
-          `<span class="rline dim">Flag verified against target ${targetKey}. First captured by ${data.capturedBy} at ${fmtTime(data.capturedAt)}.</span>`;
+          `<span class="rline dim">Flag verified against target ${data.target}. Progress: ${data.captureCount}/${data.totalTargets}.</span>`;
       }
       result.classList.add('show','ok');
       input.value = '';
@@ -505,6 +537,7 @@
   }
   tickClock();
   setInterval(tickClock, 1000);
+  restoreProgress();
   refreshLeaderboard();
   setInterval(refreshLeaderboard, 5000);
 
